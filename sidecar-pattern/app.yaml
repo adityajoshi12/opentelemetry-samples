@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-app
+spec:
+  selector:
+    matchLabels:
+      app: node-app
+  template:
+    metadata:
+      labels:
+        app: node-app
+      annotations:
+        sidecar.opentelemetry.io/inject: "true"
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: adityajoshi12/service-a:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          # value: "http://otel-collector.default.svc.cluster.local:4317"
+          value: "http://localhost:4317"
+        - name: OTLP_SERVICENAME
+          value: "node-app"
+        - name: SERVICE_B
+          value: "java-app:8080"
+        resources:
+         requests:
+            memory: "64Mi"
+            cpu: "250m"
+         limits:
+            memory: "128Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-app
+spec:
+  type: ClusterIP
+  selector:
+    app: node-app
+  ports:
+  - name: app
+    port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app
+spec:
+  selector:
+    matchLabels:
+      app: java-app
+  template:
+    metadata:
+      labels:
+        app: java-app
+      annotations:
+        sidecar.opentelemetry.io/inject: "true"
+    spec:
+      containers:
+        - name: java-app
+          image: adityajoshi12/service-b:1.0
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 8080
+          env:
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: "http://localhost:4317"
+          - name: OTEL_TRACES_EXPORTER
+            value: "otlp"
+          - name: OTEL_RESOURCE_ATTRIBUTES
+            value: "service.name=java-app"
+          resources:
+            requests:
+                memory: "128Mi"
+                cpu: "250m"
+            limits:
+                memory: "248Mi"
+                cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app
+spec:
+  type: ClusterIP
+  selector:
+    app: java-app
+  ports:
+  - name: app
+    port: 8080
